@@ -5,26 +5,53 @@ import {Pool} from "./Pool.sol";
 
 contract Factory {
 
+    /*//////////////////////////////////////////////////////////////
+                               VARIABLES
+    //////////////////////////////////////////////////////////////*/
+
+    // Mapping to get the address of the amm pool with both the asset addresses
     mapping(address => mapping(address => address)) public getPool;
 
-    event PoolCreated(address indexed asset0, address indexed asset1, address indexed pool);
-    // error CannotBeSameAddress();
+    /*//////////////////////////////////////////////////////////////
+                               EVENTS
+    //////////////////////////////////////////////////////////////*/
 
-    function createPool(address assetA, address assetB) public returns(address pool){
-        require(assetA != assetB, "SAME_ADDRESS_NOT_POSSIBLE");
-        (address asset0, address asset1) = assetA < assetB ? (assetA, assetB) : (assetB, assetA);
-        require(asset0 != address(0), "ZERO_ADDRESS");
-        require(getPool[asset0][asset1] == address(0), "POOL_ALREADY_EXISTS");
+    event PoolCreated(address indexed _baseAsset, address indexed _perpAsset, address indexed pool);
+
+    /*//////////////////////////////////////////////////////////////
+                            CUSTOM ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    error SameAddress();
+    error ZeroAddress();
+    error PoolAlreadyExists();
+
+    /*//////////////////////////////////////////////////////////////
+                              FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Create a pool (From Uniswap v2)
+    /// @dev changed require statement to custom errors for gas savings
+    /// @param baseAsset base asset of the pool which is generally a stablecoin
+    /// @param perpAsset the other asset in the amm pool which is being speculated
+    /// @return pool the address of the amm pool
+    function createPool(address baseAsset, address perpAsset) public returns(address pool){
+        if(baseAsset == perpAsset) revert SameAddress();
+        (address _baseAsset, address _perpAsset) = baseAsset < perpAsset ? (baseAsset, perpAsset) : (perpAsset, baseAsset);
+        if(_baseAsset == address(0)) revert ZeroAddress();
+        if(getPool[_baseAsset][_perpAsset] != address(0)) revert PoolAlreadyExists();
         bytes memory bytecode = type(Pool).creationCode;
-        bytes32 salt = keccak256(abi.encodePacked(asset0, asset1));
+        bytes32 salt = keccak256(abi.encodePacked(_baseAsset, _perpAsset));
         assembly {
             pool := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
         
-        Pool(pool).initialize(asset0, asset1);
-        getPool[asset0][asset1] = pool;
-        getPool[asset1][asset0] = pool; // populate mapping in the reverse direction
+        Pool(pool).initialize(_baseAsset, _perpAsset);
+        getPool[_baseAsset][_perpAsset] = pool;
+        getPool[_perpAsset][_baseAsset] = pool; 
         
-        emit PoolCreated(asset0, asset1, pool);
+        emit PoolCreated(_baseAsset, _perpAsset, pool);
     }
+
+    /// Add fees functions if required
 }

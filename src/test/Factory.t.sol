@@ -20,6 +20,8 @@ contract FactoryTest is DSTest {
     }
 
     function testCreatePool() public {
-        emit log_address(factory.createPool(WETH, USDC));
+        address poolAddress = factory.createPool(USDC, WETH);
+        
+        emit log_address(poolAddress);
     }
 }
